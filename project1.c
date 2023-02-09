@@ -23,7 +23,6 @@ int main(void){
 
     printf("Enter the number of processes: ");
     scanf("%d", &k);
-    printf("Attempting to create %d processes\n", k);
 
     // create pipes
     for (int i = 0; i < k; i++){
@@ -31,10 +30,22 @@ int main(void){
     }
 
     // create nodes
+
+    /* int pid = fork();
+    if (pid == 0){
+        for (int i = 0; i < k; i++){
+
+            printf("Creating new child process [%d]\n", i);
+            nodeProcess(i);
+            exit(0);
+        }
+    }
+ */
+
     for (int i = 0; i < k; i++){
         int pid = fork();
-        printf("Creating new child process [%d]\n", i);
         if (pid == 0){ // make child processes enter the nodeProcess function
+            printf("Creating new child process [%d]\n", i);
             nodeProcess(i);
             exit(0);
         }
@@ -46,6 +57,7 @@ int main(void){
 
     while(1){
         // get mesage and destination
+        sleep(1);
         printf("Enter a message to send ~ ");
         scanf("%s", message);
 
@@ -73,49 +85,44 @@ int main(void){
     return 0;
 }
 
-void nodeProcess(int id){
-
-    int left = (id + k - 1) % k;
-    int right = (id + k) % k; // neat trick courtesy of chatGPT
-
+void nodeProcess(int nodeID){
+    int left = (nodeID + k - 1) % k;
+    int right = (nodeID + k) % k; // neat trick courtesy of chatGPT
+    int iter = 0;
     while(1){
+        printf("Entered a new iteration, nodeID = %d, iteration = %d\n", nodeID, iter);
+        iter++;
         struct messageHeader hdr;
+
         if (read(pipes[left][0], &hdr, sizeof(hdr)) > 0){ // if reading from the pipe results in data
-            printf("\nApple is at node %d\n\n", id);
-            if (hdr.dest == id){ // if this node is the destination for the message
-                printf("[DEST REACHED] Node %d received a message from Node %d -- %s\n", id, left, hdr.message);
+            printf("\nApple is at node %d\n\n", nodeID);
+
+            // if the message is meant for this node
+            if (hdr.dest == nodeID){
+                printf("[DEST REACHED] Node %d received a message from Node %d -- %s\n", nodeID, left, hdr.message);
                 hdr.dest = -1;
                 strcpy(messageReceived, hdr.message);
                 strcpy(hdr.message, "Empty");
                 sleep(1);
-                write(pipes[id][1], &hdr, sizeof(hdr));
-                break;
             }
-            else{ // if the message is not meant for this node
-                if (strcmp(hdr.message, "Empty") == 0){
-                    if (id == 0){
-                        printf("Apple has returned to the parent.\n");
-                        printf("Enter a new message to send:");
-                        char message[100];
-                        scanf("%s", message);
-                        struct messageHeader newHdr;
-                        strcpy(newHdr.message, message);
-                        newHdr.dest = 5;
-                        write(pipes[id][1], &newHdr, sizeof(newHdr));
-                    }
-                    printf("Node %d received the empty message (it has already been delivered)\n", id);                    
+            // if the message is not meant for this node
+            else{
+                // if the message has reached back to the parent
+                if (nodeID == 0){ 
+                    printf("Apple has returned to the parent.\n");
+                             
                 }
+                // if a non-parent node receives the message
                 else{
-                    printf("Node %d received the message from node %d, but it wasn't meant for it. Forwarding to node %d\n", id, left, right + 1);
-                }
-                sleep(1); // sleep to avoid timing issues
-                write(pipes[id][1], &hdr, sizeof(hdr)); // write to the pipe so the next node can read
-                break;
+                   printf("Node %d received the message from node %d, but it wasn't meant for it. Forwarding to node %d\n", nodeID, left, right + 1); 
+                }  
             }
+            write(pipes[nodeID][1], &hdr, sizeof(hdr));
+            break;
         }
+        
     }
 }
-
 void endGracefully(int n){
     putchar('\n');
     for (int i = 0; i < k; i++){

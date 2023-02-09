@@ -1,0 +1,31 @@
+ /* if (read(pipes[left][0], &hdr, sizeof(hdr)) > 0){ // if reading from the pipe results in data
+            printf("\nApple is at node %d\n\n", id);
+            if (hdr.dest == id){ // if this node is the destination for the message
+                printf("[DEST REACHED] Node %d received a message from Node %d -- %s\n", id, left, hdr.message);
+                hdr.dest = -1;
+                strcpy(messageReceived, hdr.message);
+                strcpy(hdr.message, "Empty");
+                sleep(1);
+                write(pipes[id][1], &hdr, sizeof(hdr));
+                //break;
+            }
+            else{ // if the message is not meant for this node
+                if (strcmp(hdr.message, "Empty") == 0){
+                    if (id == 0){
+                        printf("Apple has returned to the parent.\n");
+                        printf("Enter a new message to send:");
+                        char message[100];
+                        scanf("%s", message);
+                        struct messageHeader newHdr;
+                        strcpy(newHdr.message, message);
+                        newHdr.dest = 5;
+                        write(pipes[id][1], &newHdr, sizeof(newHdr)); 
+                    }
+                    printf("Node %d received the empty message (it has already been delivered)\n", id);                    
+                }
+                else{
+                    printf("Node %d received the message from node %d, but it wasn't meant for it. Forwarding to node %d\n", id, left, right + 1);
+                }
+                sleep(1); // sleep to avoid timing issues
+                write(pipes[id][1], &hdr, sizeof(hdr)); // write to the pipe so the next node can read
+                break; */
