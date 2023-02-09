@@ -16,16 +16,14 @@ struct messageHeader{
 
 int k;
 int pipes[MAX_LEN][2];
+char messageReceived[100] = "";
 
 
 int main(void){
-    pid_t nodes[MAX_LEN];
 
     printf("Enter the number of processes: ");
     scanf("%d", &k);
     printf("Attempting to create %d processes\n", k);
-
-    
 
     // create pipes
     for (int i = 0; i < k; i++){
@@ -35,11 +33,11 @@ int main(void){
     // create nodes
     for (int i = 0; i < k; i++){
         int pid = fork();
+        printf("Creating new child process [%d]\n", i);
         if (pid == 0){ // make child processes enter the nodeProcess function
             nodeProcess(i);
             exit(0);
         }
-        nodes[i] = pid;
     }
     
     char message[100];
@@ -58,9 +56,7 @@ int main(void){
             if (dest < 0 || dest >= k){
                 printf("Invalid node. Try again");
             }
-            else{
-                break;
-            }
+            else { break; }
         }
         
         // put data into struct
@@ -70,7 +66,8 @@ int main(void){
         // install sig handler
         signal(SIGINT, endGracefully);
         sleep(1);
-        write(pipes[0][1], &hdr, sizeof(hdr));
+        write(pipes[0][1], &hdr, sizeof(hdr)); // write to node 0 to start the chain
+        printf("Message has made it back to the parent -- %s\n", messageReceived);
     }
 
     return 0;
@@ -83,15 +80,36 @@ void nodeProcess(int id){
 
     while(1){
         struct messageHeader hdr;
-        if (read(pipes[left][0], &hdr, sizeof(hdr)) > 0){
+        if (read(pipes[left][0], &hdr, sizeof(hdr)) > 0){ // if reading from the pipe results in data
+            printf("\nApple is at node %d\n\n", id);
             if (hdr.dest == id){ // if this node is the destination for the message
-                printf("Node %d received a message from Node %d -- %s\n", id, left, hdr.message);
+                printf("[DEST REACHED] Node %d received a message from Node %d -- %s\n", id, left, hdr.message);
+                hdr.dest = -1;
+                strcpy(messageReceived, hdr.message);
+                strcpy(hdr.message, "Empty");
+                sleep(1);
+                write(pipes[id][1], &hdr, sizeof(hdr));
                 break;
             }
             else{ // if the message is not meant for this node
-                printf("Node %d received the message from node %d, but it wasn't meant for it. Forwarding to node %d\n", id, left, right + 1);
-                sleep(1);
-                write(pipes[id][1], &hdr, sizeof(hdr));
+                if (strcmp(hdr.message, "Empty") == 0){
+                    if (id == 0){
+                        printf("Apple has returned to the parent.\n");
+                        printf("Enter a new message to send:");
+                        char message[100];
+                        scanf("%s", message);
+                        struct messageHeader newHdr;
+                        strcpy(newHdr.message, message);
+                        newHdr.dest = 5;
+                        write(pipes[id][1], &newHdr, sizeof(newHdr));
+                    }
+                    printf("Node %d received the empty message (it has already been delivered)\n", id);                    
+                }
+                else{
+                    printf("Node %d received the message from node %d, but it wasn't meant for it. Forwarding to node %d\n", id, left, right + 1);
+                }
+                sleep(1); // sleep to avoid timing issues
+                write(pipes[id][1], &hdr, sizeof(hdr)); // write to the pipe so the next node can read
                 break;
             }
         }
