@@ -4,10 +4,12 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <string.h>
+#include <stdbool.h>
 #define MAX_LEN 10
 
 void endGracefully(int n);
 void nodeProcess(int pid);
+void getMessage();
 
 struct messageHeader{
     int dest;
@@ -17,6 +19,8 @@ struct messageHeader{
 int k;
 int pipes[MAX_LEN][2];
 char messageReceived[100] = "";
+
+int done = false;
 
 
 int main(void){
@@ -28,36 +32,26 @@ int main(void){
     for (int i = 0; i < k; i++){
         pipe(pipes[i]);
     }
-
-    // create nodes
-
-    /* int pid = fork();
-    if (pid == 0){
-        for (int i = 0; i < k; i++){
-
-            printf("Creating new child process [%d]\n", i);
-            nodeProcess(i);
-            exit(0);
-        }
-    }
- */
-
+    
     for (int i = 0; i < k; i++){
         int pid = fork();
         if (pid == 0){ // make child processes enter the nodeProcess function
-            printf("Creating new child process [%d]\n", i);
             nodeProcess(i);
             exit(0);
         }
     }
-    
+    getMessage();
+    return 0;
+}
+
+void getMessage(){
     char message[100];
     int dest = 0;
     struct messageHeader hdr;
 
+
     while(1){
-        // get mesage and destination
-        sleep(1);
+        // get message and destination
         printf("Enter a message to send ~ ");
         scanf("%s", message);
 
@@ -77,25 +71,27 @@ int main(void){
 
         // install sig handler
         signal(SIGINT, endGracefully);
-        sleep(1);
+ 
         write(pipes[0][1], &hdr, sizeof(hdr)); // write to node 0 to start the chain
-        printf("Message has made it back to the parent -- %s\n", messageReceived);
+        if (read(pipes[k - 1][0], &hdr, sizeof(hdr)) > 0){
+            printf("\nParent process detects that circle has completed. Attempting to take a new message\n");
+        }
     }
-
-    return 0;
 }
+
+
 
 void nodeProcess(int nodeID){
     int left = (nodeID + k - 1) % k;
-    int right = (nodeID + k) % k; // neat trick courtesy of chatGPT
+    int right = ((nodeID + k) % k); // neat trick courtesy of chatGPT
     int iter = 0;
+
     while(1){
-        printf("Entered a new iteration, nodeID = %d, iteration = %d\n", nodeID, iter);
         iter++;
         struct messageHeader hdr;
 
         if (read(pipes[left][0], &hdr, sizeof(hdr)) > 0){ // if reading from the pipe results in data
-            printf("\nApple is at node %d\n\n", nodeID);
+            printf("\nApple is at node %d\n", nodeID);
 
             // if the message is meant for this node
             if (hdr.dest == nodeID){
@@ -105,24 +101,21 @@ void nodeProcess(int nodeID){
                 strcpy(hdr.message, "Empty");
                 sleep(1);
             }
+
+            if (nodeID == 0){
+                done = true;
+            }
             // if the message is not meant for this node
             else{
-                // if the message has reached back to the parent
-                if (nodeID == 0){ 
-                    printf("Apple has returned to the parent.\n");
-                             
-                }
-                // if a non-parent node receives the message
-                else{
-                   printf("Node %d received the message from node %d, but it wasn't meant for it. Forwarding to node %d\n", nodeID, left, right + 1); 
-                }  
-            }
+                printf("Node %d received the message from node %d, but it wasn't meant for it. Forwarding to node %d\n", nodeID, left, nodeID == k - 1? 0 : right + 1); 
+                sleep(1);
+            }  
+            
             write(pipes[nodeID][1], &hdr, sizeof(hdr));
-            break;
         }
-        
     }
 }
+
 void endGracefully(int n){
     putchar('\n');
     for (int i = 0; i < k; i++){
