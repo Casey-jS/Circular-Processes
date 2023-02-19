@@ -18,25 +18,24 @@ struct messageHeader{
 
 int k;
 int pipes[MAX_LEN][2];
-char messageReceived[100] = "";
-
-int done = false;
-
 
 int main(void){
 
     printf("Enter the number of processes: ");
     scanf("%d", &k);
+    k++;
 
     // create pipes
     for (int i = 0; i < k; i++){
         pipe(pipes[i]);
     }
     
-    for (int i = 0; i < k; i++){
+    for (int i = 1; i < k; i++){
         int pid = fork();
         if (pid == 0){ // make child processes enter the nodeProcess function
+            printf("Node (process) %d created\n", i);
             nodeProcess(i);
+            printf("Node (process) %d closed.\n", i);
             exit(0);
         }
     }
@@ -49,18 +48,26 @@ void getMessage(){
     int dest = 0;
     struct messageHeader hdr;
 
+    // install sig handler
+    signal(SIGINT, endGracefully);
+
 
     while(1){
         // get message and destination
+        sleep(1);
         printf("Enter a message to send ~ ");
         scanf("%s", message);
 
         while(1){
-            printf("Enter a node to send it to (between 0 and %d) ~ ", k - 1);
+            printf("Enter a node to send it to (between 1 and %d) ~ ", k - 1);
             scanf("%d", &dest);
 
             if (dest < 0 || dest >= k){
-                printf("Invalid node. Try again");
+                printf("Invalid node.\n");
+            }
+
+            else if (dest == 0){
+                printf("Node 0 is the parent node.\n");
             }
             else { break; }
         }
@@ -69,26 +76,23 @@ void getMessage(){
         hdr.dest = dest;
         strcpy(hdr.message, message);
 
-        // install sig handler
-        signal(SIGINT, endGracefully);
+        printf("\nParent process handing the apple off to Node 1\n");
  
-        write(pipes[0][1], &hdr, sizeof(hdr)); // write to node 0 to start the chain
+        write(pipes[0][1], &hdr, sizeof(hdr)); // write to first child to start the chain
+        
         if (read(pipes[k - 1][0], &hdr, sizeof(hdr)) > 0){
-            printf("\nParent process detects that circle has completed. Attempting to take a new message\n");
+            printf("\nParent process received the apple.\n\n");
         }
     }
 }
 
-
-
 void nodeProcess(int nodeID){
     int left = (nodeID + k - 1) % k;
     int right = ((nodeID + k) % k); // neat trick courtesy of chatGPT
-    int iter = 0;
 
     while(1){
-        iter++;
         struct messageHeader hdr;
+
 
         if (read(pipes[left][0], &hdr, sizeof(hdr)) > 0){ // if reading from the pipe results in data
             printf("\nApple is at node %d\n", nodeID);
@@ -96,21 +100,20 @@ void nodeProcess(int nodeID){
             // if the message is meant for this node
             if (hdr.dest == nodeID){
                 printf("[DEST REACHED] Node %d received a message from Node %d -- %s\n", nodeID, left, hdr.message);
+                char receivedMessage[100];
+                strcpy(receivedMessage, hdr.message);
+                printf("Node %d copied the message \"%s\" into memory\n", nodeID, receivedMessage);
                 hdr.dest = -1;
-                strcpy(messageReceived, hdr.message);
                 strcpy(hdr.message, "Empty");
                 sleep(1);
             }
-
-            if (nodeID == 0){
-                done = true;
-            }
+    
             // if the message is not meant for this node
             else{
-                printf("Node %d received the message from node %d, but it wasn't meant for it. Forwarding to node %d\n", nodeID, left, nodeID == k - 1? 0 : right + 1); 
+                printf("Node %d received the message from node %d, but it wasn't meant for it. Forwarding to %s", nodeID, left,
+                nodeID == k - 1 ? "parent process\n" : "next node\n"); 
                 sleep(1);
             }  
-            
             write(pipes[nodeID][1], &hdr, sizeof(hdr));
         }
     }
