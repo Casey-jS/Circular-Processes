@@ -8,7 +8,8 @@
 #define MAX_LEN 10
 
 void endGracefully(int n);
-void nodeProcess(int pid);
+void nodeProcess(int nodeID);
+void endProcess(int n);
 void getMessage();
 
 struct messageHeader{
@@ -21,10 +22,24 @@ int pipes[MAX_LEN][2];
 
 int main(void){
 
-    printf("Enter the number of processes: ");
-    scanf("%d", &k);
-    k++;
-
+    while(1){
+        char input[2];
+        printf("Enter the number of processes: (between 1 and 9): ");
+        scanf("%s", input);
+        
+        k = atoi(input);
+        if (k <= 0){
+            printf("Input must be a number greater than 0\n");
+        }
+        else if (k > 10){
+            printf("Too many processes\n");
+        }
+        else{
+            k++;
+            break;
+        }
+    }
+    
     // create pipes
     for (int i = 0; i < k; i++){
         pipe(pipes[i]);
@@ -35,8 +50,6 @@ int main(void){
         if (pid == 0){ // make child processes enter the nodeProcess function
             printf("Node (process) %d created\n", i);
             nodeProcess(i);
-            printf("Node (process) %d closed.\n", i);
-            exit(0);
         }
     }
     getMessage();
@@ -45,8 +58,8 @@ int main(void){
 
 void getMessage(){
     char message[100];
-    int dest = 0;
     struct messageHeader hdr;
+    int destInt;
 
     // install sig handler
     signal(SIGINT, endGracefully);
@@ -57,13 +70,22 @@ void getMessage(){
         sleep(1);
         printf("Enter a message to send ~ ");
         scanf("%s", message);
+        char* dest;
+
 
         while(1){
             printf("Enter a node to send it to (between 1 and %d) ~ ", k - 1);
-            scanf("%d", &dest);
+            scanf("%s", dest);
+            destInt = atoi(dest);
 
-            if (dest < 0 || dest >= k){
+            // if a string is entered
+            if (destInt == 0){
+                printf("Input must be a number between 1 and %d\n", k-1);
+            }
+
+            else if (destInt < 0 || destInt >= k){
                 printf("Invalid node.\n");
+                continue;
             }
 
             else if (dest == 0){
@@ -73,7 +95,7 @@ void getMessage(){
         }
         
         // put data into struct
-        hdr.dest = dest;
+        hdr.dest = destInt;
         strcpy(hdr.message, message);
 
         printf("\nParent process handing the apple off to Node 1\n");
@@ -89,10 +111,9 @@ void getMessage(){
 void nodeProcess(int nodeID){
     int left = (nodeID + k - 1) % k;
     int right = ((nodeID + k) % k); // neat trick courtesy of chatGPT
-
+    signal(SIGINT, endProcess);
     while(1){
         struct messageHeader hdr;
-
 
         if (read(pipes[left][0], &hdr, sizeof(hdr)) > 0){ // if reading from the pipe results in data
             printf("\nApple is at node %d\n", nodeID);
@@ -107,7 +128,6 @@ void nodeProcess(int nodeID){
                 strcpy(hdr.message, "Empty");
                 sleep(1);
             }
-    
             // if the message is not meant for this node
             else{
                 printf("Node %d received the message from node %d, but it wasn't meant for it. Forwarding to %s", nodeID, left,
@@ -117,6 +137,10 @@ void nodeProcess(int nodeID){
             write(pipes[nodeID][1], &hdr, sizeof(hdr));
         }
     }
+}
+void endProcess(int n){
+    printf("\nEnding node process w/ pid %d\n", getpid());
+    exit(0);
 }
 
 void endGracefully(int n){
