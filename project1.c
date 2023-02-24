@@ -59,31 +59,23 @@ int main(void){
 void getMessage(){
     char message[100];
     struct messageHeader hdr;
-    int destInt;
+    int dest;
 
     // install sig handler
     signal(SIGINT, endGracefully);
-
 
     while(1){
         // get message and destination
         sleep(1);
         printf("Enter a message to send ~ ");
         scanf("%s", message);
-        char* dest;
-
-
+        
         while(1){
             printf("Enter a node to send it to (between 1 and %d) ~ ", k - 1);
-            scanf("%s", dest);
-            destInt = atoi(dest);
+            
+            scanf("%d", &dest);
 
-            // if a string is entered
-            if (destInt == 0){
-                printf("Input must be a number between 1 and %d\n", k-1);
-            }
-
-            else if (destInt < 0 || destInt >= k){
+            if (dest < 0 || dest >= k){
                 printf("Invalid node.\n");
                 continue;
             }
@@ -95,7 +87,7 @@ void getMessage(){
         }
         
         // put data into struct
-        hdr.dest = destInt;
+        hdr.dest = dest;
         strcpy(hdr.message, message);
 
         printf("\nParent process handing the apple off to Node 1\n");
@@ -139,17 +131,17 @@ void nodeProcess(int nodeID){
     }
 }
 void endProcess(int n){
-    printf("\nEnding node process w/ pid %d\n", getpid());
+    printf("Node process closing\n");
     exit(0);
 }
 
 void endGracefully(int n){
-    putchar('\n');
+    sleep(.5);
     for (int i = 0; i < k; i++){
         close(pipes[i][0]);
         close(pipes[i][1]);
-        printf("Pipe %d closed!\n", i);
+        printf("Pipe %d closed\n", i);
     }
-    printf("Ending the program gracefully\n");
+
     exit(0);
 }
